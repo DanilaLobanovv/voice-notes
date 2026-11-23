@@ -25,7 +25,7 @@ def get_own_note(note_id: uuid.UUID, db: Session, user: User) -> Note:
     return note
 
 
-@router.get("", response_model=list[NoteOut])
+@router.get("", response_model=list[NoteDetail])  # с аудио, чтобы клиент показал значок записи без лишних запросов
 def list_notes(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     return db.scalars(
         select(Note).where(Note.user_id == user.id).order_by(Note.updated_at.desc())
