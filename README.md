@@ -1,232 +1,164 @@
-# Voice Notes: серверная часть (этап 2)
+# Voice Notes API
 
-> **Как пользоваться этим файлом.** Положите его в пустую папку проекта, откройте в ней Claude Code и напишите:
-> «Прочитай README.md и выполни проект по шагам. После каждого шага запускай проверку и показывай результат».
-> Раздел «Инструкции для агента» читает Claude, остальное нужно вам для понимания и отчёта.
+Серверная часть приложения для текстовых заметок с аудиозаписями. REST API на FastAPI и PostgreSQL, запускается одной командой через Docker Compose.
 
----
+Клиент на Android (Kotlin + Jetpack Compose) будет на следующем этапе и будет работать с этим API.
 
-## 1. О проекте
+## Возможности
 
-Android-приложение для текстовых заметок с аудиозаписями (клиент на Kotlin + Jetpack Compose будет на следующем этапе). Сейчас делается **только серверная часть**: REST API, база данных PostgreSQL, запуск через Docker Compose.
+- регистрация и вход по email и паролю, авторизация по JWT-токену;
+- создание, просмотр, изменение и удаление заметок;
+- загрузка аудиозаписей M4A к заметке, скачивание и удаление;
+- каждый пользователь видит только свои данные: на чужую заметку сервер отвечает 404;
+- удаление заметки удаляет и её аудио (и записи в базе, и файлы на диске).
 
-Автор: студент, начинающий разработчик. Код должен быть простым, читаемым, с короткими комментариями на русском там, где логика не очевидна. Цель автора: понимать каждую строчку, поэтому после каждого шага агент кратко объясняет, что сделал и зачем.
+## Технологии
 
-## 2. Что нужно сдать на этапе 2
-
-1. Схема БД: таблицы, поля, связи.
-2. Запуск через Docker + скриншот запущенных контейнеров + 2–3 предложения (что настроили, какие были ошибки, как исправили).
-3. Аутентификация: что использовали, объяснение 5–7 предложений, скриншот успешного входа.
-4. CRUD: таблица операций + скриншот запроса в Postman.
-5. Связи между данными: что с чем связано.
-6. Список адресов API + скриншот.
-7. Что исправили после замечаний.
-8. Вывод.
-
-## 3. Технологии (не менять без согласования)
-
-| Что | Выбор |
+| Что | Чем |
 |---|---|
-| Язык / фреймворк | Python 3.12, FastAPI |
-| ORM / миграции | SQLAlchemy 2.x, Alembic |
-| База данных | PostgreSQL 16 |
-| Вход | JWT (PyJWT), хеш пароля bcrypt |
-| Запуск | Docker Compose (сервисы `api` и `db`) |
-| Тесты | pytest + httpx (TestClient) |
-| Проверка вручную | Swagger (`/docs`) и Postman |
+| Язык и фреймворк | Python 3.12, FastAPI |
+| База данных | PostgreSQL 16, SQLAlchemy 2, миграции Alembic |
+| Вход | JWT (PyJWT, HS256, срок 60 минут), пароли хешируются bcrypt |
+| Запуск | Docker Compose: сервисы `api` и `db` |
+| Тесты | pytest + TestClient |
 
-## 4. Предметные правила
+## Быстрый старт
 
-- Регистрация и вход по email + пароль. Пароль минимум 8 символов, хранится только как bcrypt-хеш. Email приводится к нижнему регистру, уникален.
-- Пользователь видит и меняет **только свои** данные. Чужой объект возвращает **404** (не 403).
-- Заметка: заголовок обязателен, 1–120 символов; текст необязателен.
-- Аудиозапись: формат M4A (расширение `.m4a`), не больше 20 МБ и не дольше 600 секунд. Файл лежит на диске в Docker-томе, в БД только путь и метаданные.
-- Удаление заметки удаляет её аудиозаписи (и строки в БД, и файлы на диске).
-- Идентификаторы заметок и записей: UUID.
-- Секреты (`.env`, ключи) не попадают в Git и в логи.
-
-## 5. Схема БД
-
-```
-users            id (int, PK), email (unique), password_hash, created_at
-notes            id (uuid, PK), user_id → users.id (ON DELETE CASCADE),
-                 title (≤120), text, created_at, updated_at
-audio_records    id (uuid, PK), note_id → notes.id (ON DELETE CASCADE),
-                 file_path, duration_sec, size_bytes, created_at
-```
-
-Связи:
-- у пользователя много заметок (1:N);
-- у заметки много аудиозаписей (1:N);
-- (необязательно, Should) `tags(id, user_id, name)` и `note_tags(note_id, tag_id)`: заметки и теги многие-ко-многим.
-
-## 6. API
-
-| Метод и адрес | Назначение | Успех |
-|---|---|---|
-| `POST /auth/register` | регистрация (JSON: email, password) | 201 |
-| `POST /auth/login` | вход (форма: username=email, password), возвращает JWT | 200 |
-| `GET /auth/me` | текущий пользователь | 200 |
-| `GET /notes` | список своих заметок | 200 |
-| `POST /notes` | создать заметку | 201 |
-| `GET /notes/{id}` | получить заметку с её аудио | 200 |
-| `PUT /notes/{id}` | изменить заголовок и/или текст | 200 |
-| `DELETE /notes/{id}` | удалить заметку и её аудио | 204 |
-| `POST /notes/{id}/audio` | загрузить M4A (form-data: `file`, `duration_sec`) | 201 |
-| `GET /audio/{id}` | скачать запись | 200 |
-| `DELETE /audio/{id}` | удалить запись | 204 |
-| `GET /health` | проверка живости сервера | 200 |
-
-Ошибки: 401 нет/плохой токен или неверный пароль, 404 чужой или несуществующий объект, 409 email занят, 413 файл больше 20 МБ, 415 не M4A, 422 неверные данные.
-
-## 7. Структура репозитория
-
-```
-voice-notes/
-├── README.md
-├── docker-compose.yml
-├── .env.example          (в Git)
-├── .env                  (НЕ в Git)
-├── .gitignore
-├── docs/                 (схема БД, текст отчёта, скриншоты)
-└── backend/
-    ├── Dockerfile
-    ├── requirements.txt
-    ├── alembic.ini
-    ├── alembic/
-    ├── tests/
-    └── app/
-        ├── main.py  config.py  database.py  models.py
-        ├── schemas.py  security.py  deps.py
-        └── routers/ auth.py  notes.py  audio.py
-```
-
----
-
-## 8. Инструкции для агента (Claude Code)
-
-### Правила работы
-- Работай **по шагам** из раздела 9. После каждого шага: запусти проверку шага, покажи результат, в 2–3 предложениях объясни автору, что сделано и зачем, затем переходи дальше.
-- Если проверка не проходит: найди причину, исправь, запиши в `docs/errors.md` одну строку «ошибка → причина → решение» (материал для отчёта).
-- Git-flow: ветки `main` и `develop`; каждая группа шагов в своей `feature/*`-ветке, коммиты маленькие и осмысленные на русском или английском. **Не делай `git push`, не создавай PR и не меняй настройки remote без явного разрешения автора.** Слияние в `develop` делает автор после ревью второго студента.
-- Не коммить `.env`, файлы аудио, `__pycache__`, `venv`. Секретный ключ генерируй командой `openssl rand -hex 32` и пиши только в `.env`.
-- Не выводи пароли и токены в логи.
-- Не удаляй Docker-тома (`docker compose down -v`) без разрешения автора: там данные.
-- Версии зависимостей: после первого рабочего запуска зафиксируй их (`pip freeze` внутри контейнера, оставь только прямые зависимости с версиями).
-- Скриншоты агент сделать не может. В конце подготовь автору список, что и в каком порядке снимать (раздел 11).
-- Если требование неясно, задай один конкретный вопрос автору, не угадывай.
-
-### Ключевые технические решения (соблюдать)
-- Хеш пароля: пакет `bcrypt` напрямую (`bcrypt.hashpw/checkpw`), без `passlib`.
-- JWT: `jwt.encode({"sub": str(user_id), "exp": ...}, SECRET_KEY, algorithm="HS256")`, срок жизни 60 минут.
-- Текущий пользователь: зависимость `get_current_user` на `OAuth2PasswordBearer(tokenUrl="/auth/login")`, чтобы работала кнопка Authorize в Swagger. Вход принимает `OAuth2PasswordRequestForm`.
-- Доступ к чужим объектам: все выборки заметок фильтруются по `Note.user_id == current_user.id`; записи аудио ищутся через JOIN с `Note` по владельцу. Результат поиска `None` даёт 404.
-- Каскады: и `ondelete="CASCADE"` во внешних ключах, и `cascade="all, delete-orphan"` в связях SQLAlchemy. Перед удалением заметки удалить файлы её записей с диска.
-- Конфигурация через `pydantic-settings` из переменных окружения: `DATABASE_URL`, `SECRET_KEY`, `ACCESS_TOKEN_EXPIRE_MINUTES=60`, `AUDIO_DIR=/data/audio`.
-- Docker: в `db` настроить `healthcheck` (`pg_isready`), в `api` `depends_on: db: condition: service_healthy`. В `DATABASE_URL` хост БД `db`, не `localhost`. Тома `pgdata` и `audio`. Для разработки примонтировать `./backend:/app`, чтобы файлы миграций появлялись на диске. Команда запуска API: `alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000`.
-- Alembic: в `env.py` взять URL из настроек, импортировать `models`, поставить `target_metadata = Base.metadata`. Миграции создавать через `--autogenerate`, запуск внутри контейнера (`docker compose run --rm api alembic ...`).
-
----
-
-## 9. Пошаговый план
-
-### Шаг 1. Каркас и Git (ветка `feature/docker-db`)
-- `git init`, ветки `main` и `develop`, затем `feature/docker-db`.
-- `.gitignore`, `.env.example`, `.env` (с новым секретом), структура папок, пустые `__init__.py`.
-- `backend/requirements.txt`: fastapi, uvicorn[standard], sqlalchemy>=2.0, psycopg2-binary, alembic, pydantic-settings, email-validator, python-multipart, bcrypt, PyJWT, pytest, httpx.
-- **Проверка:** структура создана, `git status` не показывает `.env`.
-
-### Шаг 2. Docker и БД
-- `backend/Dockerfile` (python:3.12-slim), `docker-compose.yml` по разделу 8, минимальный `app/main.py` с `/health`.
-- `docker compose up --build -d`.
-- **Проверка:** `docker compose ps` показывает `db` как healthy и `api` как running; `curl localhost:8000/health` возвращает `{"status":"ok"}`.
-
-### Шаг 3. Модели и миграции
-- `config.py`, `database.py`, `models.py` по разделу 5.
-- `alembic init`, правка `env.py`, `alembic revision --autogenerate -m "init"`, `alembic upgrade head`.
-- **Проверка:** `docker compose exec db psql -U $POSTGRES_USER -d $POSTGRES_DB -c "\dt"` показывает `users`, `notes`, `audio_records`, `alembic_version`. Выведи `\d notes` и `\d audio_records` (внешние ключи видны).
-- Закоммитить, затем сделать для автора `docs/db-schema.md` с описанием таблиц и кодом для dbdiagram.io.
-
-### Шаг 4. Аутентификация (ветка `feature/auth`, от `develop`)
-- `security.py`, `deps.py`, `schemas.py` (пользователь и токен), `routers/auth.py`.
-- **Проверка (curl):** регистрация даёт 201; повторная с тем же email даёт 409; пароль короче 8 символов даёт 422; вход с верным паролем даёт 200 и токен; с неверным 401; `/auth/me` с токеном 200, без токена 401.
-
-### Шаг 5. CRUD заметок (ветка `feature/notes-crud`)
-- Остальные схемы, `routers/notes.py`.
-- **Проверка:** создать, получить список, получить по id, изменить, удалить; пустой заголовок даёт 422; заголовок длиннее 120 символов даёт 422.
-- **Проверка изоляции:** второй пользователь получает 404 на чтение, изменение и удаление заметки первого и не видит её в своём списке.
-
-### Шаг 6. Аудио (ветка `feature/audio`)
-- `routers/audio.py` по разделу 6.
-- **Проверка:** сгенерировать небольшой тестовый `.m4a` (например, `ffmpeg -f lavfi -i sine=frequency=440:duration=2 -c:a aac test.m4a`, если ffmpeg нет, предложить автору любой короткий файл `.m4a`); загрузка даёт 201; скачивание возвращает те же байты; `.mp3` даёт 415; файл больше 20 МБ даёт 413; `duration_sec=700` даёт 422; чужой пользователь получает 404.
-- Удаление заметки удаляет файл с диска (проверить `docker compose exec api ls /data/audio/...`).
-
-### Шаг 7. Автотесты
-- `backend/tests/` на pytest: регистрация, вход, CRUD, изоляция пользователей, ограничения аудио.
-- Тесты должны использовать отдельную тестовую БД или откатывать данные, не затрагивая рабочую.
-- **Проверка:** `docker compose run --rm api pytest -q` проходит полностью.
-
-### Шаг 8. Перезапуск и сохранность данных
-- `docker compose down` затем `docker compose up -d` (без `-v`).
-- **Проверка:** созданные ранее пользователь и заметки на месте, файлы аудио на месте.
-
-### Шаг 9. Документация и отчёт
-- Обновить этот README: раздел «Как запустить» (команды с нуля).
-- Создать `docs/report-stage2.md` с черновиком всех 8 пунктов отчёта по разделу 2 (раздел 11 ниже). Использовать реальные факты проекта и записи из `docs/errors.md`. Места для скриншотов отметить `[СКРИНШОТ: ...]`.
-- Создать `DEPLOY.md` с краткой инструкцией запуска.
-
-### Шаг 10. Итог
-- Прогнать полную проверку с нуля: `docker compose down -v` (только с разрешения автора), `docker compose up --build`, smoke-тест из шагов 4–6, `pytest`.
-- Показать автору итоговый список созданных файлов и веток, а также что осталось сделать вручную (скриншоты, push, PR).
-
----
-
-## 10. Как запустить (для автора)
-
-С нуля (нужен запущенный Docker Desktop):
+Нужен установленный и запущенный [Docker Desktop](https://www.docker.com/products/docker-desktop/).
 
 ```bash
-cp .env.example .env          # затем поменять POSTGRES_PASSWORD и SECRET_KEY
-openssl rand -hex 32          # сгенерировать SECRET_KEY и вставить в .env
-docker compose up --build -d  # миграции применяются автоматически при старте api
+git clone https://github.com/DanilaLobanovv/voice-notes.git
+cd voice-notes
+cp .env.example .env
+```
+
+Откройте `.env` и замените значения:
+- `POSTGRES_PASSWORD`: любой пароль из букв и цифр, например результат `openssl rand -hex 16`;
+- `SECRET_KEY`: результат команды `openssl rand -hex 32`.
+
+Запуск:
+
+```bash
+docker compose up --build -d
+```
+
+Проверка:
+
+```bash
 docker compose ps             # db: healthy, api: running
 curl localhost:8000/health    # {"status":"ok"}
 ```
 
-Документация и ручная проверка: http://localhost:8000/docs. Кнопка **Authorize**: в поле `username` ввести email, в `password` пароль.
+Документация API с возможностью отправлять запросы: **http://localhost:8000/docs**. Чтобы вызывать защищённые адреса, зарегистрируйтесь через `POST /auth/register`, нажмите **Authorize** и введите email в поле `username` и пароль.
 
-Автотесты (используют отдельную БД `<POSTGRES_DB>_test`, рабочие данные не трогают):
+Остановить: `docker compose down` (данные сохраняются). Остановить и удалить все данные: `docker compose down -v`.
+
+## API
+
+| Метод и адрес | Что делает | Успех |
+|---|---|---|
+| `POST /auth/register` | регистрация (JSON: `email`, `password`) | 201 |
+| `POST /auth/login` | вход (форма: `username`=email, `password`), возвращает токен | 200 |
+| `GET /auth/me` | текущий пользователь | 200 |
+| `GET /notes` | список своих заметок | 200 |
+| `POST /notes` | создать заметку (JSON: `title`, `text`) | 201 |
+| `GET /notes/{id}` | заметка вместе со списком её аудио | 200 |
+| `PUT /notes/{id}` | изменить заголовок и/или текст | 200 |
+| `DELETE /notes/{id}` | удалить заметку и её аудио | 204 |
+| `POST /notes/{id}/audio` | загрузить аудио (form-data: `file`, `duration_sec`) | 201 |
+| `GET /audio/{id}` | скачать аудиофайл | 200 |
+| `DELETE /audio/{id}` | удалить аудио | 204 |
+| `GET /health` | проверка, что сервер работает | 200 |
+
+Все адреса, кроме `/auth/register`, `/auth/login` и `/health`, требуют заголовок `Authorization: Bearer <токен>`.
+
+Пример через curl:
 
 ```bash
-docker compose run --rm api pytest -q
+curl -X POST localhost:8000/auth/register -H "Content-Type: application/json" \
+     -d '{"email": "me@example.com", "password": "password123"}'
+
+TOKEN=$(curl -s -X POST localhost:8000/auth/login -d "username=me@example.com&password=password123" \
+        | python3 -c "import json,sys; print(json.load(sys.stdin)['access_token'])")
+
+curl -X POST localhost:8000/notes -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+     -d '{"title": "Первая заметка", "text": "Привет"}'
 ```
 
-После правки кода: `docker compose restart api`. После правки `models.py`: `docker compose run --rm api alembic revision --autogenerate -m "..."`, затем `docker compose restart api`.
+### Правила и ошибки
 
-Остановить: `docker compose down` (данные сохраняются). Полностью с очисткой данных: `docker compose down -v`.
+- Пароль: минимум 8 символов. Email приводится к нижнему регистру и должен быть уникальным.
+- Заголовок заметки обязателен, от 1 до 120 символов. Текст необязателен.
+- Аудио: только `.m4a`, не больше 20 МБ и не дольше 600 секунд.
 
-Подробнее: [DEPLOY.md](DEPLOY.md).
+| Код | Когда |
+|---|---|
+| 401 | нет токена, токен неверный или просрочен, неверный email или пароль |
+| 404 | объект не существует или принадлежит другому пользователю |
+| 409 | email уже зарегистрирован |
+| 413 | файл больше 20 МБ |
+| 415 | файл не M4A |
+| 422 | неверные данные (короткий пароль, пустой заголовок, длительность больше 600 секунд) |
 
-## 11. Материалы для отчёта и скриншоты
+## База данных
 
-Что снять руками (агент это сделать не может):
+```
+users ──< notes ──< audio_records
+```
 
-| № | Пункт отчёта | Что на скриншоте |
-|---|---|---|
-| 1 | Схема БД | картинка из dbdiagram.io и/или вывод `\dt` |
-| 2 | Docker | `docker compose ps` или Docker Desktop с запущенными контейнерами |
-| 3 | Вход | Postman: `POST /auth/login`, статус 200 и `access_token` |
-| 4 | CRUD | Postman: любой запрос, например `POST /notes`, с телом и ответом 201 |
-| 6 | Адреса API | страница `http://localhost:8000/docs` целиком |
+- `users`: `id`, `email`, `password_hash`, `created_at`
+- `notes`: `id` (UUID), `user_id`, `title`, `text`, `created_at`, `updated_at`
+- `audio_records`: `id` (UUID), `note_id`, `file_path`, `duration_sec`, `size_bytes`, `created_at`
 
-Тексты для пунктов 2, 3, 5, 7, 8 агент готовит в `docs/report-stage2.md`:
-- **Docker:** 2–3 предложения (что настроили, ошибки, решения) из `docs/errors.md`.
-- **Аутентификация:** 5–7 предложений своими словами (хеш пароля, выдача токена, заголовок `Authorization: Bearer`, проверка подписи и срока).
-- **CRUD:** таблица «операция, метод и адрес, код ответа».
-- **Связи:** «у пользователя много заметок, у заметки много записей, каскадное удаление».
-- **Исправления после замечаний:** если замечаний нет, перечислить, что доработал сам (например, хеширование паролей, фильтр по владельцу, лимиты аудио).
-- **Вывод:** 3–4 предложения: что готово, чему научился, что дальше (Android-клиент, офлайн-очередь, теги).
+У пользователя много заметок, у заметки много аудиозаписей, удаление каскадное. Аудиофайлы лежат в Docker-томе `audio`, в базе хранятся только путь и метаданные. Подробнее: [docs/db-schema.md](docs/db-schema.md).
 
-## 12. Что дальше (этап 3)
+## Разработка
 
-Android-клиент на Kotlin и Compose: экраны регистрации и входа, список заметок, запись звука через `MediaRecorder`, воспроизведение через Media3 ExoPlayer, Retrofit для обращения к этому API, Room как локальный кеш.
+| Что | Команда |
+|---|---|
+| автотесты | `docker compose run --rm api pytest -q` |
+| один тест | `docker compose run --rm api pytest -q tests/test_notes.py::test_create_note_returns_201` |
+| перезапустить сервер после правки кода | `docker compose restart api` |
+| новая миграция после правки `models.py` | `docker compose run --rm api alembic revision --autogenerate -m "описание"` |
+| логи сервера | `docker compose logs -f api` |
+| консоль базы данных | `docker compose exec db psql -U <POSTGRES_USER> -d <POSTGRES_DB>` |
+
+Тесты работают на отдельной базе `<POSTGRES_DB>_test` и временной папке для аудио, поэтому рабочие данные не трогают.
+
+Ветки: `main` (стабильная версия) ← `develop` ← `feature/*`.
+
+## Структура
+
+```
+voice-notes/
+├── docker-compose.yml       сервисы api и db, тома pgdata и audio
+├── .env.example             образец настроек (.env в Git не попадает)
+├── docs/                    схема БД, отчёт, журнал ошибок, ТЗ этапа
+└── backend/
+    ├── Dockerfile
+    ├── requirements.txt
+    ├── alembic/             миграции базы данных
+    ├── tests/               автотесты pytest
+    └── app/
+        ├── main.py          создание приложения, подключение роутеров
+        ├── config.py        настройки из переменных окружения
+        ├── database.py      подключение к БД
+        ├── models.py        таблицы (SQLAlchemy)
+        ├── schemas.py       форматы запросов и ответов (Pydantic)
+        ├── security.py      хеширование паролей и JWT
+        ├── deps.py          получение текущего пользователя по токену
+        ├── storage.py       работа с файлами на диске
+        └── routers/         auth.py, notes.py, audio.py
+```
+
+## Документы
+
+- [docs/spec-stage2.md](docs/spec-stage2.md): техническое задание этапа 2;
+- [docs/db-schema.md](docs/db-schema.md): схема базы данных и код для dbdiagram.io;
+- [docs/report-stage2.md](docs/report-stage2.md): отчёт по этапу 2;
+- [docs/errors.md](docs/errors.md): ошибки, найденные при разработке, и как их исправили;
+- [DEPLOY.md](DEPLOY.md): краткая инструкция запуска.
+
+## Что дальше
+
+Этап 3: Android-клиент на Kotlin и Jetpack Compose. Экраны входа и списка заметок, запись звука через `MediaRecorder`, воспроизведение через Media3 ExoPlayer, Retrofit для работы с этим API, Room для локального кеша.

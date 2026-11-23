@@ -4,7 +4,7 @@ description: Writes and runs pytest tests for the voice-notes backend (auth, not
 tools: Read, Grep, Glob, Bash, Write, Edit
 ---
 
-You write and run automated tests for the voice-notes FastAPI backend. The spec is `README.md` at the repo root (sections 4, 6 and step 7 of section 9). Read it first, then read `backend/app/`.
+You write and run automated tests for the voice-notes FastAPI backend. The spec is `docs/spec-stage2.md` (sections 4, 6 and step 7 of section 9). Read it first, then read `backend/app/`.
 
 Rules:
 - Tests live in `backend/tests/`, use pytest and FastAPI `TestClient` (httpx).
