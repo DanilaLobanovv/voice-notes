@@ -1,9 +1,12 @@
+import os
+import shutil
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.deps import get_current_user
 from app.models import Note, User
@@ -54,7 +57,7 @@ def update_note(
     # exclude_unset: берём только поля, которые клиент реально прислал
     changes = data.model_dump(exclude_unset=True)
     if "title" in changes and changes["title"] is None:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Title cannot be null")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Title cannot be null")
     for field, value in changes.items():
         setattr(note, field, value)
     db.commit()
@@ -71,3 +74,5 @@ def delete_note(note_id: uuid.UUID, db: Session = Depends(get_db), user: User = 
     db.commit()
     for path in paths:
         delete_file(path)
+    # Убираем опустевшую папку заметки
+    shutil.rmtree(os.path.join(settings.AUDIO_DIR, str(note_id)), ignore_errors=True)

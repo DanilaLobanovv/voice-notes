@@ -14,7 +14,8 @@ from app.database import Base
 config = context.config
 
 # URL базы берём из настроек (переменная DATABASE_URL), а не из alembic.ini
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# "%" удваиваем: configparser в alembic иначе считает его спецсимволом
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

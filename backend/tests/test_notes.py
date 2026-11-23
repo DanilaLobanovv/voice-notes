@@ -70,3 +70,13 @@ def test_delete_note(client, auth_headers, note):
     response = client.delete(f"/notes/{note['id']}", headers=auth_headers)
     assert response.status_code == 204
     assert client.get(f"/notes/{note['id']}", headers=auth_headers).status_code == 404
+
+
+def test_create_note_blank_title_returns_422(client, auth_headers):
+    response = client.post("/notes", json={"title": "   "}, headers=auth_headers)
+    assert response.status_code == 422
+
+
+def test_update_note_blank_title_returns_422(client, auth_headers, note):
+    response = client.put(f"/notes/{note['id']}", json={"title": "   "}, headers=auth_headers)
+    assert response.status_code == 422

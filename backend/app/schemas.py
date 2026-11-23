@@ -8,7 +8,15 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 class UserCreate(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=8, max_length=72)  # bcrypt учитывает только первые 72 байта
+    password: str = Field(min_length=8)
+
+    @field_validator("password")
+    @classmethod
+    def password_max_bytes(cls, value: str) -> str:
+        # bcrypt принимает не больше 72 байт; кириллица занимает 2 байта на символ
+        if len(value.encode()) > 72:
+            raise ValueError("Password must be at most 72 bytes")
+        return value
 
     @field_validator("email")
     @classmethod
@@ -44,11 +52,16 @@ class AudioOut(BaseModel):
 # ---------- Заметки ----------
 
 class NoteCreate(BaseModel):
+    # Обрезаем пробелы по краям, чтобы заголовок "   " считался пустым (422)
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     title: str = Field(min_length=1, max_length=120)
     text: str | None = None
 
 
 class NoteUpdate(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     # Оба поля необязательны: меняем только то, что прислали
     title: str | None = Field(default=None, min_length=1, max_length=120)
     text: str | None = None

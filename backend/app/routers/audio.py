@@ -53,21 +53,24 @@ def upload_audio(
     os.makedirs(note_dir, exist_ok=True)
     path = os.path.join(note_dir, f"{audio_id}.m4a")
 
-    # Пишем кусками и считаем размер; как только превысили лимит — удаляем и отвечаем 413
-    size = 0
-    with open(path, "wb") as out:
-        while chunk := file.file.read(CHUNK_SIZE):
-            size += len(chunk)
-            if size > MAX_SIZE_BYTES:
-                break
-            out.write(chunk)
-    if size > MAX_SIZE_BYTES:
-        delete_file(path)
-        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "File is larger than 20 MB")
+    # Пишем кусками и считаем размер; как только превысили лимит — отвечаем 413.
+    # При любой ошибке (лимит, обрыв, сбой БД) удаляем файл, чтобы на диске не было «сирот»
+    try:
+        size = 0
+        with open(path, "wb") as out:
+            while chunk := file.file.read(CHUNK_SIZE):
+                size += len(chunk)
+                if size > MAX_SIZE_BYTES:
+                    raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "File is larger than 20 MB")
+                out.write(chunk)
 
-    record = AudioRecord(id=audio_id, note_id=note.id, file_path=path, duration_sec=duration_sec, size_bytes=size)
-    db.add(record)
-    db.commit()
+        record = AudioRecord(id=audio_id, note_id=note.id, file_path=path, duration_sec=duration_sec, size_bytes=size)
+        db.add(record)
+        db.commit()
+    except Exception:
+        db.rollback()
+        delete_file(path)
+        raise
     db.refresh(record)
     return record
 

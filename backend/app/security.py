@@ -14,6 +14,9 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, password_hash: str) -> bool:
+    # bcrypt 5 падает на паролях длиннее 72 байт; такой пароль заведомо неверный
+    if len(password.encode()) > 72:
+        return False
     return bcrypt.checkpw(password.encode(), password_hash.encode())
 
 

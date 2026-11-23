@@ -87,3 +87,21 @@ def test_delete_note_removes_audio_files(client, auth_headers, note):
 
     assert client.delete(f"/notes/{note['id']}", headers=auth_headers).status_code == 204
     assert files_on_disk() == []
+
+
+def test_huge_content_length_rejected_before_reading_body(client, auth_headers, note):
+    # Заголовок обещает 100 МБ: сервер отвечает 413 сразу, не принимая тело
+    response = client.post(
+        f"/notes/{note['id']}/audio",
+        content=b"x",
+        headers={**auth_headers, "Content-Length": str(100 * 1024 * 1024), "Content-Type": "multipart/form-data; boundary=b"},
+    )
+    assert response.status_code == 413
+
+
+def test_delete_note_removes_note_folder(client, auth_headers, note):
+    upload_audio(client, note["id"], auth_headers)
+    note_dir = os.path.join(settings.AUDIO_DIR, note["id"])
+    assert os.path.isdir(note_dir)
+    client.delete(f"/notes/{note['id']}", headers=auth_headers)
+    assert not os.path.exists(note_dir)

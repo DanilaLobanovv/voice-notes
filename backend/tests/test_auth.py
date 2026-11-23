@@ -64,3 +64,14 @@ def test_me_without_token_returns_401(client):
 def test_me_with_bad_token_returns_401(client):
     response = client.get("/auth/me", headers={"Authorization": "Bearer not-a-real-token"})
     assert response.status_code == 401
+
+
+def test_register_password_over_72_bytes_returns_422(client):
+    # 72 символа кириллицы = 144 байта: раньше это давало 500 из-за bcrypt 5
+    response = client.post("/auth/register", json={"email": "long@example.com", "password": "я" * 72})
+    assert response.status_code == 422
+
+
+def test_login_password_over_72_bytes_returns_401(client, auth_headers):
+    response = client.post("/auth/login", data={"username": "alice@example.com", "password": "a" * 100})
+    assert response.status_code == 401
