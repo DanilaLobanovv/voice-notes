@@ -29,6 +29,13 @@ def test_uploaded_audio_is_listed_in_note(client, auth_headers, note):
     assert [r["id"] for r in records] == [audio_id]
 
 
+def test_notes_list_contains_audio_records(client, auth_headers, note):
+    """Мобильному клиенту нужно видеть наличие записи прямо в списке заметок."""
+    audio_id = upload_audio(client, note["id"], auth_headers).json()["id"]
+    listed = client.get("/notes", headers=auth_headers).json()
+    assert [r["id"] for r in listed[0]["audio_records"]] == [audio_id]
+
+
 def test_download_returns_same_bytes(client, auth_headers, note):
     content = os.urandom(5000)
     audio_id = upload_audio(client, note["id"], auth_headers, content=content).json()["id"]
