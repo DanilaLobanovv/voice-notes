@@ -1,0 +1,19 @@
+# Секреты
+.env
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Аудиофайлы (лежат в Docker-томе, в Git не нужны)
+*.m4a
+data/
+
+# IDE и локальные настройки
+.idea/
+.claude/settings.local.json
+.DS_Store
