@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints, field_validator
 
 
 # ---------- Пользователи ----------
@@ -51,19 +52,19 @@ class AudioOut(BaseModel):
 
 # ---------- Заметки ----------
 
-class NoteCreate(BaseModel):
-    # Обрезаем пробелы по краям, чтобы заголовок "   " считался пустым (422)
-    model_config = ConfigDict(str_strip_whitespace=True)
+# Заголовок: пробелы по краям обрезаются, поэтому "   " считается пустым (422).
+# Текст заметки не трогаем — сохраняем как прислали.
+Title = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
 
-    title: str = Field(min_length=1, max_length=120)
+
+class NoteCreate(BaseModel):
+    title: Title
     text: str | None = None
 
 
 class NoteUpdate(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True)
-
     # Оба поля необязательны: меняем только то, что прислали
-    title: str | None = Field(default=None, min_length=1, max_length=120)
+    title: Title | None = None
     text: str | None = None
 
 

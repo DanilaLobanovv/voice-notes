@@ -17,6 +17,8 @@ async def limit_request_size(request: Request, call_next):
     if content_length and content_length.isdigit() and int(content_length) > MAX_REQUEST_BYTES:
         return JSONResponse(status_code=413, content={"detail": "Request is too large"})
     return await call_next(request)
+
+
 app.include_router(auth.router)
 app.include_router(notes.router)
 app.include_router(audio.router)

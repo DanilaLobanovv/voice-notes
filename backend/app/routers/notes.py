@@ -74,5 +74,5 @@ def delete_note(note_id: uuid.UUID, db: Session = Depends(get_db), user: User = 
     db.commit()
     for path in paths:
         delete_file(path)
-    # Убираем опустевшую папку заметки
+    # Удаляем папку заметки целиком (файлы её записей уже удалены выше)
     shutil.rmtree(os.path.join(settings.AUDIO_DIR, str(note_id)), ignore_errors=True)

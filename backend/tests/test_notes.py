@@ -80,3 +80,12 @@ def test_create_note_blank_title_returns_422(client, auth_headers):
 def test_update_note_blank_title_returns_422(client, auth_headers, note):
     response = client.put(f"/notes/{note['id']}", json={"title": "   "}, headers=auth_headers)
     assert response.status_code == 422
+
+
+def test_note_text_is_saved_exactly(client, auth_headers):
+    # Пробелы обрезаются только в заголовке, текст сохраняется как есть
+    text = "  строка 1\n\n    отступ\n"
+    response = client.post("/notes", json={"title": "  Заголовок  ", "text": text}, headers=auth_headers)
+    assert response.status_code == 201
+    assert response.json()["title"] == "Заголовок"
+    assert response.json()["text"] == text
