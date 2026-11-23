@@ -183,12 +183,29 @@ voice-notes/
 
 ## 10. Как запустить (для автора)
 
+С нуля (нужен запущенный Docker Desktop):
+
 ```bash
-cp .env.example .env        # затем поменять пароли и SECRET_KEY
-docker compose up --build   # сервер: http://localhost:8000/docs
+cp .env.example .env          # затем поменять POSTGRES_PASSWORD и SECRET_KEY
+openssl rand -hex 32          # сгенерировать SECRET_KEY и вставить в .env
+docker compose up --build -d  # миграции применяются автоматически при старте api
+docker compose ps             # db: healthy, api: running
+curl localhost:8000/health    # {"status":"ok"}
 ```
 
+Документация и ручная проверка: http://localhost:8000/docs. Кнопка **Authorize**: в поле `username` ввести email, в `password` пароль.
+
+Автотесты (используют отдельную БД `<POSTGRES_DB>_test`, рабочие данные не трогают):
+
+```bash
+docker compose run --rm api pytest -q
+```
+
+После правки кода: `docker compose restart api`. После правки `models.py`: `docker compose run --rm api alembic revision --autogenerate -m "..."`, затем `docker compose restart api`.
+
 Остановить: `docker compose down` (данные сохраняются). Полностью с очисткой данных: `docker compose down -v`.
+
+Подробнее: [DEPLOY.md](DEPLOY.md).
 
 ## 11. Материалы для отчёта и скриншоты
 
