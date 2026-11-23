@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-`README.md` is the spec (written in Russian): domain rules (§4), DB schema (§5), API and error codes (§6), mandatory technical decisions and git/agent rules (§8), and the step plan (§9). Read it before changing behaviour. The author is a beginner, so keep code simple and add short Russian comments where logic isn't obvious.
+`docs/spec-stage2.md` is the spec (written in Russian): domain rules (§4), DB schema (§5), API and error codes (§6), mandatory technical decisions and git/agent rules (§8), and the step plan (§9). Read it before changing behaviour. `README.md` is the user-facing project description. The author is a beginner, so keep code simple and add short Russian comments where logic isn't obvious.
 
 ## Commands
 
@@ -27,9 +27,9 @@ docker compose run --rm api alembic revision --autogenerate -m "msg"   # after e
 - **Ownership rule:** `routers/notes.get_own_note` filters by `Note.user_id == user.id` and `routers/audio.get_own_audio` JOINs to `Note` on the owner. Another user's object must be 404, never 403. Reuse these helpers for any new endpoint.
 - Audio files are stored at `AUDIO_DIR/<note_id>/<audio_id>.m4a`. The client filename is never used for the path. The DB only stores the path and metadata. On delete, the DB row is removed first, then `storage.delete_file`. Limits: `.m4a` only (415), ≤20 MB checked while streaming (413), `0 < duration_sec ≤ 600` (422).
 
-## Workflow rules (from README §8)
+## Workflow rules (from spec §8)
 
 - Git flow: `main` ← `develop` ← `feature/*`. The author merges into `develop` after peer review. Never `git push`, open PRs or change remotes without explicit permission.
 - Log every failed check as one line "ошибка → причина → решение" in `docs/errors.md`. It's material for `docs/report-stage2.md`.
 - Never commit `.env` or audio files, and never print secrets or tokens.
-- Project subagents: `.claude/agents/code-reviewer.md` (read-only review against the README) and `.claude/agents/test-engineer.md` (writes and runs pytest).
+- Project subagents: `.claude/agents/code-reviewer.md` (read-only review against the spec) and `.claude/agents/test-engineer.md` (writes and runs pytest).
